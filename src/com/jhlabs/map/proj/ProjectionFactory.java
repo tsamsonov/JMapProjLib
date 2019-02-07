@@ -321,14 +321,8 @@ public class ProjectionFactory {
         Class cls = (Class) registry.get(name);
         if (cls != null) {
             try {
-                Projection projection = (Projection) cls.newInstance();
-                if (projection != null) {
-                    projection.setName(name); // is this needed ? FIXME
-                }
-                return projection;
-            } catch (IllegalAccessException e) {
-                e.printStackTrace();
-            } catch (InstantiationException e) {
+                return (Projection) cls.newInstance();
+            } catch (IllegalAccessException | InstantiationException e) {
                 e.printStackTrace();
             }
         }
@@ -378,6 +372,7 @@ public class ProjectionFactory {
             register("eck5", Eckert5Projection.class);
             register("eck6", Eckert6Projection.class);
             register("eckgreif", EckertGreifendorffProjection.class);
+            register("equalearth", EqualEarthProjection.class);
             register("eqc", EquidistantCylindricalProjection.class);
             register("eqdc", EquidistantConicProjection.class);
             register("euler", EulerProjection.class);
@@ -386,6 +381,7 @@ public class ProjectionFactory {
             register("fouc_s", FoucautSinusoidalProjection.class);
             register("four2", Fournier2Projection.class);
             register("gall", GallProjection.class);
+            register("gallpeters", GallPetersProjection.class);
             register("gins8", Ginzburg8Projection.class);
 //		register( "gn_sinu", Projection.class);
             register("gnom", GnomonicAzimuthalProjection.class);
@@ -457,7 +453,10 @@ public class ProjectionFactory {
             register("tcc", TCCProjection.class);
             register("tcea", TCEAProjection.class);
             register("tissot", TissotProjection.class);
+            register("toblermercator", ToblerMercator.class);
             register("tmerc", TransverseMercatorProjection.class);
+            register("tlat", TransformedLambertAzimuthalTransverse.class);
+            
 //		register( "tpeqd", Projection.class, "Two Point Equidistant" );
 //		register( "tpers", Projection.class, "Tilted perspective" );
 //		register( "ups", Projection.class, "Universal Polar Stereographic" );

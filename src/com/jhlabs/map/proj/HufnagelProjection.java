@@ -21,17 +21,16 @@ import java.awt.geom.Point2D;
  * The Hufnagel projection family was introduced by Herbert Hufnagel in
  * "Hufnagel, H. 1989. Ein System unecht-zylindrischer Kartennetze fŸr
  * Erdkarten. Kartographische Nachrichten, 39(3), 89Ð96." All projections are
- * equal-area. Some parameter combinations break the projection into pieces.
- * This is due to the difficulty of finding good initial guesses for the
- * iterative computation of coordinates. Implementation by Bernhard Jenny and
- * Bojan Savric, Oregon State University, with help by Daniel Strebe,
- * Mapthematics. November 2014 to July 2015.
+ * equal-area. Implementation by Bernhard Jenny, Oregon State University, Bojan
+ * Savric, Oregon State University, with substantial contributions by Daniel
+ * "daan" Strebe, Mapthematics. November 2014 to October 2015.
  *
- * @author Bojan Savric, Bernhard Jenny
+ * @author Bojan Savric
+ * @author Bernhard Jenny
  */
 public class HufnagelProjection extends PseudoCylindricalProjection {
 
-    private static final double EPS = 1e-6;
+    private static final double EPS = 1e-14;
     private static final int MAX_ITER = 100;
     private static final int LUT_SIZE = 101;
 
@@ -55,20 +54,12 @@ public class HufnagelProjection extends PseudoCylindricalProjection {
         if (psiMax == 0) {
             K = Math.sqrt(aspectRatio / Math.PI);
         } else {
-            Point2D.Double outPoint = new Point2D.Double();
-            double width;
-
             K2 = (4. * Math.PI) / (2. * psiMax + (1. + A - B / 2.) * Math.sin(2. * psiMax)
                     + ((A + B) / 2.) * Math.sin(4. * psiMax) + (B / 2.) * Math.sin(6. * psiMax));
             K = Math.sqrt(K2);
-            C = 1.;
-
+            C = Math.sqrt(aspectRatio * Math.sin(psiMax)
+                    * Math.sqrt((1 + A * Math.cos(2 * psiMax) + B * Math.cos(4 * psiMax)) / (1 + A + B)));
             initializeLookUpTables();
-
-            this.project(Math.PI, 0., outPoint);
-            width = outPoint.x;
-            this.project(0., Math.PI / 2., outPoint);
-            C = Math.sqrt(aspectRatio / (width / outPoint.y));
         }
     }
 
@@ -98,7 +89,7 @@ public class HufnagelProjection extends PseudoCylindricalProjection {
             }
 
             double r = Math.sqrt(1 + A * Math.cos(2 * psi) + B * Math.cos(4 * psi));
-            double y = r * Math.sin(psi);
+            double y = K / C * r * Math.sin(psi);
             if (i > 0) {
                 if (y < yLUT[i - 1] || phi < latLUT[i - 1]) {
                     y = yLUT[i - 1];
@@ -140,16 +131,16 @@ public class HufnagelProjection extends PseudoCylindricalProjection {
         int i = 0;
         while (true) {
             double psi_x_2 = psi * 2.;
-            double deltaPsiNominator = (.25 * K2) * (psi_x_2 + (1. + A - .5 * B)
+            double deltaPsiNumerator = (.25 * K2) * (psi_x_2 + (1. + A - .5 * B)
                     * Math.sin(psi_x_2) + (0.5 * (A + B)) * Math.sin(2. * psi_x_2)
                     + (0.5 * B) * Math.sin(3. * psi_x_2)) - Math.PI * Math.sin(phi);
-            if (Math.abs(deltaPsiNominator) < EPS) {
+            if (Math.abs(deltaPsiNumerator) < EPS) {
                 break;
             }
             double deltaPsiDenominator = (.5 * K2) * (1. + (1. + A - .5 * B)
                     * Math.cos(psi_x_2) + (A + B) * Math.cos(2. * psi_x_2)
                     + (3. * .5 * B) * Math.cos(3. * psi_x_2));
-            double deltaPsi = deltaPsiNominator / deltaPsiDenominator;
+            double deltaPsi = deltaPsiNumerator / deltaPsiDenominator;
             if (Double.isNaN(deltaPsi) || Double.isInfinite(deltaPsi) || i++ > MAX_ITER) {
                 return Double.NaN;
             }
@@ -162,17 +153,21 @@ public class HufnagelProjection extends PseudoCylindricalProjection {
         double psi = approximatePsiFromTable(y, yLUT);
         int i = 0;
         while (true) {
-            double cosPsi = Math.cos(psi);
+            double sinPsi = Math.sin(psi);
+            double sin2Psi = Math.sin(2 * psi);
             double cos2Psi = Math.cos(2 * psi);
             double cos4Psi = Math.cos(4 * psi);
             double r = Math.sqrt(1 + A * cos2Psi + B * cos4Psi);
-            double deltaPsiNominator = r * Math.sin(psi) - y;
-            if (Math.abs(deltaPsiNominator) < EPS) {
+            double r_sinPsi = r * sinPsi;
+            double scaledY = y * C / K;
+            double deltaPsiNumerator = r_sinPsi * r_sinPsi - scaledY * scaledY;
+            if (Math.abs(deltaPsiNumerator) < EPS) {
                 break;
             }
-            double deltaPsiDenominator = (cosPsi * (1 - A + 2 * B
-                    + (2 * A - 4 * B) * cos2Psi + 3 * B * cos4Psi)) / r;
-            double deltaPsi = deltaPsiNominator / deltaPsiDenominator;
+            double deltaPsiDenominator = sin2Psi * (1 - A + 2 * B
+                    + (2 * A - 4 * B) * cos2Psi + 3 * B * cos4Psi);
+                    
+            double deltaPsi = deltaPsiNumerator / deltaPsiDenominator;
             if (Double.isNaN(deltaPsi) || Double.isInfinite(deltaPsi) || i++ > MAX_ITER) {
                 return Double.NaN;
             }
@@ -212,7 +207,7 @@ public class HufnagelProjection extends PseudoCylindricalProjection {
             dst.y = Math.asin(y * K);
         } else {
 
-            double psi = psiFromY(y * C / K); // using interpolation table
+            double psi = psiFromY(y); // using interpolation table
             if (Double.isNaN(psi) || Math.abs(psi) > psiMax) {
                 dst.x = dst.y = Double.NaN;
                 return dst;
